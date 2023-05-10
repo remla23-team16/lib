@@ -1,0 +1,43 @@
+name: Release
+# only trigger on tags, `verify` has already been triggered by push to PR
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 'lts/Hydrogen'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@remla23-team16'
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Set package.json package version to match the tag
+        run: |
+          TAG=${{ github.ref_name }}
+          # remove v prefix
+          TAG=${TAG#v}
+          npm version --no-git-tag-version $TAG
+          git config user.name github-actions
+          git config user.email "github-actions@github.com"
+          git add .
+          git commit -m "Bump package.json version to $TAG"
+          git push origin HEAD:main
+          # update the tag to reference this commit instead
+          git tag -fa $TAG -m "Update tag to match package.json version"
+          git push origin $TAG -f
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      - name: Publish
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GH_TOKEN }}
